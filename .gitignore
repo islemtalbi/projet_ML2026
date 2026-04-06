@@ -2,9 +2,11 @@
 __pycache__/  
 venv/  
 .env  
-data/raw/*  
-data/processed/*  
-*.csv  
+# Data brute (geree par DVC)  
+data/raw/*.csv  
+data/processed/*.csv  
+# Modeles  
 *.pkl  
 *.joblib  
+# MLflow  
 mlruns/ 
