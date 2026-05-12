@@ -1,0 +1,105 @@
+name: CI/CD — Eco-Smart Classifier
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────
+  lint:
+    name: Linting (black, flake8, isort)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install linting tools
+        run: pip install black flake8 isort
+
+      - name: black — format check
+        run: black --check src/ tests/
+
+      - name: isort — import order check
+        run: isort --check-only src/ tests/
+
+      - name: flake8 — style check
+        run: flake8 src/ tests/ --max-line-length=100 --ignore=E203,W503
+
+  # ──────────────────────────────────────────────────────────────────
+  tests:
+    name: Tests pytest (coverage ≥ 70%)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download NLTK data
+        run: |
+          python -c "
+          import nltk
+          for pkg in ['stopwords', 'punkt', 'wordnet', 'punkt_tab']:
+              nltk.download(pkg, quiet=True)
+          "
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=70 \
+            -v
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  # ──────────────────────────────────────────────────────────────────
+  build-docker:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: tests
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/eco-smart-classifier:latest
+            ${{ secrets.DOCKER_USERNAME }}/eco-smart-classifier:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

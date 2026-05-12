@@ -1,0 +1,16 @@
+preprocess:
+  knn_neighbors: 5
+  iqr_factor: 3.0
+
+train:
+  n_estimators: 100
+  random_state: 42
+  test_size: 0.30
+  val_size: 0.50
+  min_accuracy: 0.70
+
+nlp:
+  ngram_min: 1
+  ngram_max: 2
+  lsa_components: 100
+  random_state: 42

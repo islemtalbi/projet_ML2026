@@ -1,0 +1,51 @@
+stages:
+
+  preprocess:
+    cmd: python src/data/preprocess.py
+      --input data/raw/dataset_ProjetML_2026.csv
+      --output data/processed/dataset_clean.csv
+      --models models
+    deps:
+      - src/data/preprocess.py
+      - data/raw/dataset_ProjetML_2026.csv
+    outs:
+      - data/processed/dataset_clean.csv
+    params:
+      - params.yaml:
+          - preprocess.knn_neighbors
+          - preprocess.iqr_factor
+
+  train:
+    cmd: python src/models/train.py
+      --data data/processed/dataset_clean.csv
+      --models models
+      --experiment EcoSmart_Classification
+    deps:
+      - src/models/train.py
+      - data/processed/dataset_clean.csv
+    outs:
+      - models/classifier_best.pkl
+      - models/regressor_best.pkl
+    params:
+      - params.yaml:
+          - train.n_estimators
+          - train.random_state
+          - train.test_size
+    metrics:
+      - reports/metrics_classification.json:
+          cache: false
+
+  train_nlp:
+    cmd: python src/nlp/train_nlp.py
+      --data data/processed/dataset_clean.csv
+      --models models
+      --experiment EcoSmart_NLP
+    deps:
+      - src/nlp/train_nlp.py
+      - data/processed/dataset_clean.csv
+    outs:
+      - models/tfidf_vectorizer.pkl
+      - models/nlp_classifier.pkl
+    metrics:
+      - reports/metrics_nlp.json:
+          cache: false
