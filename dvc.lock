@@ -22,3 +22,58 @@ stages:
       hash: md5
       md5: 6c121ba6c478d108f3b1f2f7cc431ddb
       size: 2140891
+  train:
+    cmd: python src/models/train.py --data data/processed/dataset_clean.csv 
+      --models models --experiment EcoSmart_Classification
+    deps:
+    - path: data/processed/dataset_clean.csv
+      hash: md5
+      md5: 6c121ba6c478d108f3b1f2f7cc431ddb
+      size: 2140891
+    - path: src/models/train.py
+      hash: md5
+      md5: b74157ff237a3602f6934aec71903111
+      size: 15679
+    params:
+      params.yaml:
+        train.n_estimators: 100
+        train.random_state: 42
+        train.test_size: 0.3
+    outs:
+    - path: models/classifier_best.pkl
+      hash: md5
+      md5: 0096a7de51816b1a8f70860fea2644c0
+      size: 757689
+    - path: models/regressor_best.pkl
+      hash: md5
+      md5: d0184f1e8c31a0d38238db57b83f2876
+      size: 14448657
+    - path: reports/metrics_classification.json
+      hash: md5
+      md5: ec378b06cc613d79073c479c4b7e861c
+      size: 51
+  train_nlp:
+    cmd: python src/nlp/train_nlp.py --data data/processed/dataset_clean.csv 
+      --models models --experiment EcoSmart_NLP
+    deps:
+    - path: data/processed/dataset_clean.csv
+      hash: md5
+      md5: 6c121ba6c478d108f3b1f2f7cc431ddb
+      size: 2140891
+    - path: src/nlp/train_nlp.py
+      hash: md5
+      md5: 27a8742262106ffb72ff59395ecd8a8e
+      size: 10475
+    outs:
+    - path: models/nlp_classifier.pkl
+      hash: md5
+      md5: efcefde7c9be3de0173f4d3f273a6b58
+      size: 39095
+    - path: models/tfidf_vectorizer.pkl
+      hash: md5
+      md5: 0c14199a3bce9b5ad9f6eabf700ca3f6
+      size: 15952
+    - path: reports/metrics_nlp.json
+      hash: md5
+      md5: 6f8503df1d64e88d3b0a8b4e4f27f429
+      size: 435

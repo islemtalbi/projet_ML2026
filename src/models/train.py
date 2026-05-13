@@ -4,6 +4,7 @@ Extrait du notebook 02_ML_Supervise.ipynb
 """
 
 import os
+import json
 import warnings
 import argparse
 import numpy as np
@@ -11,24 +12,38 @@ import pandas as pd
 import joblib
 import mlflow
 import mlflow.sklearn
+from mlflow.tracking import MlflowClient
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, RandomForestRegressor
+from sklearn.ensemble import (
+    RandomForestClassifier,
+    GradientBoostingClassifier,
+    RandomForestRegressor,
+    GradientBoostingRegressor,
+)
 from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge
 from sklearn.svm import SVC, SVR
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, f1_score, classification_report, mean_squared_error, r2_score
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    classification_report,
+    mean_squared_error,
+    r2_score,
+)
 
 warnings.filterwarnings("ignore")
 
 FEATURES = ["Poids", "Volume", "Conductivite", "Opacite", "Rigidite", "Source_encoded"]
-TARGET   = "Categorie"
+TARGET = "Categorie"
 MIN_ACCURACY = 0.70
+MODEL_REGISTRY_NAME = "EcoSmartClassifier"
 
 
 # ══════════════════════════════════════════════════════════════════════
 # CHARGEMENT & SPLIT
 # ══════════════════════════════════════════════════════════════════════
+
 
 def load_data(path: str):
     df = pd.read_csv(path)
@@ -54,17 +69,18 @@ def split_data(X, y):
 # CLASSIFICATION — BASELINE
 # ══════════════════════════════════════════════════════════════════════
 
+
 def train_baseline_models(X_train, X_val, y_train, y_val, experiment_name: str):
     """Entraîne plusieurs modèles baseline et les logue dans MLflow."""
     mlflow.set_experiment(experiment_name)
 
     modeles = {
         "Logistic Regression": LogisticRegression(max_iter=1000),
-        "Random Forest":       RandomForestClassifier(n_estimators=100, random_state=42),
-        "Gradient Boosting":   GradientBoostingClassifier(random_state=42),
-        "SVM":                 SVC(random_state=42),
-        "KNN":                 KNeighborsClassifier(),
-        "Decision Tree":       DecisionTreeClassifier(random_state=42),
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
+        "Gradient Boosting": GradientBoostingClassifier(random_state=42),
+        "SVM": SVC(random_state=42),
+        "KNN": KNeighborsClassifier(),
+        "Decision Tree": DecisionTreeClassifier(random_state=42),
     }
 
     resultats = {}
@@ -74,7 +90,7 @@ def train_baseline_models(X_train, X_val, y_train, y_val, experiment_name: str):
             modele.fit(X_train, y_train)
             y_pred = modele.predict(X_val)
             acc = accuracy_score(y_val, y_pred)
-            f1  = f1_score(y_val, y_pred, average="weighted")
+            f1 = f1_score(y_val, y_pred, average="weighted")
 
             mlflow.log_param("model", nom)
             mlflow.log_param("features", str(FEATURES))
@@ -92,15 +108,16 @@ def train_baseline_models(X_train, X_val, y_train, y_val, experiment_name: str):
 # CLASSIFICATION — TUNING RANDOM FOREST
 # ══════════════════════════════════════════════════════════════════════
 
+
 def tune_random_forest(X_train, X_val, y_train, y_val, experiment_name: str):
-    """GridSearchCV sur Random Forest avec MLflow."""
+    """GridSearchCV sur Random Forest avec MLflow + enregistrement au Registry."""
     mlflow.set_experiment(experiment_name)
 
     param_grid = {
-        "n_estimators":      [100, 200],
-        "max_depth":         [None, 10, 20],
+        "n_estimators": [100, 200],
+        "max_depth": [None, 10, 20],
         "min_samples_split": [2, 5],
-        "min_samples_leaf":  [1, 2],
+        "min_samples_leaf": [1, 2],
     }
 
     grid_search = GridSearchCV(
@@ -116,41 +133,129 @@ def tune_random_forest(X_train, X_val, y_train, y_val, experiment_name: str):
 
     y_pred_val = best.predict(X_val)
     acc_val = accuracy_score(y_val, y_pred_val)
-    f1_val  = f1_score(y_val, y_pred_val, average="weighted")
+    f1_val = f1_score(y_val, y_pred_val, average="weighted")
     cv_mean = grid_search.best_score_
 
-    with mlflow.start_run(run_name="RF_GridSearchCV_tuned"):
+    with mlflow.start_run(run_name="RF_GridSearchCV_tuned") as run:
         mlflow.log_params(grid_search.best_params_)
         mlflow.log_metric("accuracy_val", acc_val)
         mlflow.log_metric("f1_val", f1_val)
         mlflow.log_metric("cv_accuracy_mean", cv_mean)
-        mlflow.sklearn.log_model(
+
+        model_info = mlflow.sklearn.log_model(
             best,
             artifact_path="model",
-            registered_model_name="EcoSmartClassifier",
+            registered_model_name=MODEL_REGISTRY_NAME,
         )
+        registered_run_id = run.info.run_id
 
     print(f"\n[tuning] Best params : {grid_search.best_params_}")
     print(f"[tuning] Val Acc: {acc_val:.4f} | CV: {cv_mean:.4f}")
-    return best, acc_val
+    return best, acc_val, registered_run_id
+
+
+# ══════════════════════════════════════════════════════════════════════
+# MLFLOW MODEL REGISTRY — PROMOTION STAGING → PRODUCTION
+# ══════════════════════════════════════════════════════════════════════
+
+
+def promote_model_to_production(model_name: str, acc_test: float):
+    """
+    Récupère la dernière version du modèle enregistré et la promeut
+    vers Staging puis Production si accuracy >= MIN_ACCURACY.
+    """
+    client = MlflowClient()
+
+    # Récupérer toutes les versions du modèle
+    try:
+        versions = client.search_model_versions(f"name='{model_name}'")
+    except Exception as e:
+        print(f"[registry] Erreur lors de la récupération des versions : {e}")
+        return
+
+    if not versions:
+        print(f"[registry] Aucune version trouvée pour '{model_name}'")
+        return
+
+    # Prendre la version la plus récente
+    latest_version = max(versions, key=lambda v: int(v.version))
+    version_number = latest_version.version
+
+    print(f"\n=== MLflow Model Registry — Promotion ===")
+    print(f"[registry] Modèle    : {model_name}")
+    print(f"[registry] Version   : {version_number}")
+    print(f"[registry] Accuracy  : {acc_test:.4f}")
+
+    # Ajouter une description à la version
+    client.update_model_version(
+        name=model_name,
+        version=version_number,
+        description=(
+            f"Random Forest tuné par GridSearchCV. "
+            f"Accuracy test = {acc_test:.4f}. "
+            f"Features : {FEATURES}."
+        ),
+    )
+
+    if acc_test < MIN_ACCURACY:
+        print(
+            f"[registry] Accuracy {acc_test:.4f} < seuil {MIN_ACCURACY} "
+            f"— promotion annulée."
+        )
+        return
+
+    # Promouvoir vers Staging
+    client.transition_model_version_stage(
+        name=model_name,
+        version=version_number,
+        stage="Staging",
+        archive_existing_versions=True,
+    )
+    print(f"[registry] {model_name} v{version_number} → Staging ✓")
+
+    # Promouvoir vers Production
+    client.transition_model_version_stage(
+        name=model_name,
+        version=version_number,
+        stage="Production",
+        archive_existing_versions=True,
+    )
+    print(f"[registry] {model_name} v{version_number} → Production ✓")
+
+    # Ajouter un tag de production
+    client.set_model_version_tag(
+        name=model_name,
+        version=version_number,
+        key="stage",
+        value="production",
+    )
+    client.set_model_version_tag(
+        name=model_name,
+        version=version_number,
+        key="accuracy_test",
+        value=str(round(acc_test, 4)),
+    )
+    print(f"[registry] Tags ajoutés : stage=production, accuracy_test={acc_test:.4f}")
 
 
 # ══════════════════════════════════════════════════════════════════════
 # CLASSIFICATION — ÉVALUATION FINALE (TEST SET)
 # ══════════════════════════════════════════════════════════════════════
 
+
 def evaluate_final_classifier(model, X_test, y_test, experiment_name: str):
     mlflow.set_experiment(experiment_name)
 
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
-    f1  = f1_score(y_test, y_pred, average="weighted")
+    f1 = f1_score(y_test, y_pred, average="weighted")
 
     with mlflow.start_run(run_name="final_test_evaluation"):
         mlflow.log_metric("accuracy_test", acc)
         mlflow.log_metric("f1_test", f1)
         mlflow.log_param("split", "test")
 
+    print(f"\n=== Évaluation Finale Classification ===")
     print(f"\n[test] Accuracy : {acc:.4f} | F1 : {f1:.4f}")
     print(classification_report(y_test, y_pred))
 
@@ -161,7 +266,6 @@ def evaluate_final_classifier(model, X_test, y_test, experiment_name: str):
 
     # Sauvegarde métriques JSON
     os.makedirs("reports", exist_ok=True)
-    import json
     with open("reports/metrics_classification.json", "w") as f:
         json.dump({"accuracy_test": round(acc, 4), "f1_test": round(f1, 4)}, f, indent=2)
 
@@ -171,6 +275,7 @@ def evaluate_final_classifier(model, X_test, y_test, experiment_name: str):
 # ══════════════════════════════════════════════════════════════════════
 # RÉGRESSION — PRÉDICTION PRIX
 # ══════════════════════════════════════════════════════════════════════
+
 
 def train_regression(df_ml, experiment_name: str):
     """Entraîne plusieurs régresseurs pour prédire Prix_Revente."""
@@ -188,11 +293,10 @@ def train_regression(df_ml, experiment_name: str):
 
     modeles_reg = {
         "Linear Regression": LinearRegression(),
-        "Ridge":             Ridge(),
-        "Random Forest":     RandomForestRegressor(n_estimators=100, random_state=42),
-        "Gradient Boosting": GradientBoostingClassifier(random_state=42) if False
-                             else __import__("sklearn.ensemble", fromlist=["GradientBoostingRegressor"]).GradientBoostingRegressor(random_state=42),
-        "SVR":               SVR(),
+        "Ridge": Ridge(),
+        "Random Forest": RandomForestRegressor(n_estimators=100, random_state=42),
+        "Gradient Boosting": GradientBoostingRegressor(random_state=42),
+        "SVR": SVR(),
     }
 
     resultats_reg = {}
@@ -202,7 +306,7 @@ def train_regression(df_ml, experiment_name: str):
             modele.fit(X_train_r, y_train_r)
             y_pred = modele.predict(X_test_r)
             rmse = float(np.sqrt(mean_squared_error(y_test_r, y_pred)))
-            r2   = float(r2_score(y_test_r, y_pred))
+            r2 = float(r2_score(y_test_r, y_pred))
 
             mlflow.log_param("model", nom)
             mlflow.log_metric("rmse_test", rmse)
@@ -214,7 +318,10 @@ def train_regression(df_ml, experiment_name: str):
     # Meilleur régresseur
     best_reg_nom = max(resultats_reg, key=lambda k: resultats_reg[k]["R2"])
     best_reg = resultats_reg[best_reg_nom]["model"]
-    print(f"\n[regression] Meilleur modèle : {best_reg_nom} (R²={resultats_reg[best_reg_nom]['R2']:.4f})")
+    print(
+        f"\n[regression] Meilleur modèle : {best_reg_nom} "
+        f"(R²={resultats_reg[best_reg_nom]['R2']:.4f})"
+    )
     return best_reg
 
 
@@ -222,24 +329,36 @@ def train_regression(df_ml, experiment_name: str):
 # POINT D'ENTRÉE PRINCIPAL
 # ══════════════════════════════════════════════════════════════════════
 
-def train(data_path: str, models_dir: str = "models",
-          experiment: str = "EcoSmart_Classification"):
+
+def train(
+    data_path: str,
+    models_dir: str = "models",
+    experiment: str = "EcoSmart_Classification",
+):
     os.makedirs(models_dir, exist_ok=True)
 
     X, y, df_ml = load_data(data_path)
     X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
 
-    # Classification
+    # ── 1. Baseline ────────────────────────────────────────────────
     resultats = train_baseline_models(X_train, X_val, y_train, y_val, experiment)
+
+    # ── 2. Tuning + enregistrement au Registry ─────────────────────
     print("\n=== Tuning Random Forest ===")
-    best_clf, acc_val = tune_random_forest(X_train, X_val, y_train, y_val, experiment)
-    print("\n=== Évaluation Finale Classification ===")
+    best_clf, acc_val, run_id = tune_random_forest(
+        X_train, X_val, y_train, y_val, experiment
+    )
+
+    # ── 3. Évaluation finale sur test set ──────────────────────────
     acc_test, f1_test = evaluate_final_classifier(best_clf, X_test, y_test, experiment)
 
-    # Régression
+    # ── 4. Promotion Staging → Production dans le Registry ─────────
+    promote_model_to_production(MODEL_REGISTRY_NAME, acc_test)
+
+    # ── 5. Régression ──────────────────────────────────────────────
     best_reg = train_regression(df_ml, experiment)
 
-    # Sauvegarde
+    # ── 6. Sauvegarde locale des modèles ───────────────────────────
     joblib.dump(best_clf, os.path.join(models_dir, "classifier_best.pkl"))
     joblib.dump(best_reg, os.path.join(models_dir, "regressor_best.pkl"))
     print(f"\n[saved] classifier_best.pkl + regressor_best.pkl → {models_dir}/")
@@ -249,8 +368,8 @@ def train(data_path: str, models_dir: str = "models",
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data",       default="data/processed/dataset_clean.csv")
-    parser.add_argument("--models",     default="models")
+    parser.add_argument("--data", default="data/processed/dataset_clean.csv")
+    parser.add_argument("--models", default="models")
     parser.add_argument("--experiment", default="EcoSmart_Classification")
     args = parser.parse_args()
     train(args.data, args.models, args.experiment)
