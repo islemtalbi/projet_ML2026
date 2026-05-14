@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-05-14T02:07:16.030053",
+  "reference": "data/processed/dataset_clean.csv",
+  "current": "data/processed/dataset_production.csv",
+  "threshold": 0.1,
+  "columns": {
+    "Poids": {
+      "js_divergence": 0.6247,
+      "drifted": true
+    },
+    "Volume": {
+      "js_divergence": 0.3232,
+      "drifted": true
+    },
+    "Conductivite": {
+      "js_divergence": 0.811,
+      "drifted": true
+    },
+    "Opacite": {
+      "js_divergence": 0.0,
+      "drifted": false
+    },
+    "Rigidite": {
+      "js_divergence": 0.0,
+      "drifted": false
+    }
+  },
+  "n_drifted": 3,
+  "dataset_drift": true
+}
