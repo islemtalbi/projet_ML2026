@@ -1,8 +1,8 @@
 {
-  "best_combination": "BoW+Logistic Regression",
+  "best_combination": "BoW+Naive Bayes",
   "best_accuracy": 1.0,
   "all_scores": {
-    "BoW+Naive Bayes": 0.9961,
+    "BoW+Naive Bayes": 1.0,
     "BoW+Logistic Regression": 1.0,
     "BoW+LinearSVC": 1.0,
     "TF-IDF+Naive Bayes": 1.0,

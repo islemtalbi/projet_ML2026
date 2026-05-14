@@ -62,18 +62,18 @@ stages:
       size: 2140891
     - path: src/nlp/train_nlp.py
       hash: md5
-      md5: 27a8742262106ffb72ff59395ecd8a8e
-      size: 10475
+      md5: eb74827a998dd04ec7738928986a5728
+      size: 10385
     outs:
     - path: models/nlp_classifier.pkl
       hash: md5
-      md5: efcefde7c9be3de0173f4d3f273a6b58
-      size: 39095
+      md5: 3c61bd354e56dc949d5e9ded1ff45d32
+      size: 42103
     - path: models/tfidf_vectorizer.pkl
       hash: md5
-      md5: 0c14199a3bce9b5ad9f6eabf700ca3f6
-      size: 15952
+      md5: 0375b118a617a4b1e4beaa78ef37e9eb
+      size: 17099
     - path: reports/metrics_nlp.json
       hash: md5
-      md5: 6f8503df1d64e88d3b0a8b4e4f27f429
-      size: 435
+      md5: f6b7aaf4a93a356ca971440e5ca0ecff
+      size: 424

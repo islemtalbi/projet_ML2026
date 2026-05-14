@@ -40,8 +40,7 @@ TARGET = "Categorie"
 STOP_DOMAINE = {
     "lot", "déchet", "collecté", "volume", "poids",
     "kg", "litre", "usine", "site", "matériau", "aspect",
-    "papier", "plastique", "metal", "métal", "verre",
-    "organique", "carton", "aluminium", "ferreux", "ferraille",
+    "organique", "aluminium",
 }
 
 
