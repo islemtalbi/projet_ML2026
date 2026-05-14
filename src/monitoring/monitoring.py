@@ -3,19 +3,20 @@ Module 6 -- Monitoring avec Evidently AI
 Detection de data drift numerique + text drift (Jensen-Shannon)
 """
 
+import argparse
+import json
 import os
 import sys
-import json
 import warnings
-import argparse
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
-from datetime import datetime
 from scipy.spatial.distance import jensenshannon
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Fix encodage Windows PowerShell
-sys.stdout.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding="utf-8")
 
 warnings.filterwarnings("ignore")
 
@@ -25,12 +26,15 @@ REPORTS_DIR = "reports"
 
 # -- Drift numerique via Evidently --------------------------------------------
 
-def run_numeric_drift_report(ref_path: str, cur_path: str, output_dir: str = REPORTS_DIR):
+
+def run_numeric_drift_report(
+    ref_path: str, cur_path: str, output_dir: str = REPORTS_DIR
+):
     """Genere un rapport Evidently de data drift numerique."""
     try:
-        from evidently.report import Report
         from evidently.metric_preset import DataDriftPreset
         from evidently.metrics import DatasetDriftMetric
+        from evidently.report import Report
 
         ref = pd.read_csv(ref_path)[NUMERIC_FEATURES].dropna()
         cur = pd.read_csv(cur_path)[NUMERIC_FEATURES].dropna()
@@ -65,9 +69,11 @@ def _print_drift_summary(data: dict):
             if m.get("metric") == "DatasetDriftMetric":
                 result = m["result"]
                 n_drifted = result.get("number_of_drifted_columns", 0)
-                n_total   = result.get("number_of_columns", 0)
-                drift     = result.get("dataset_drift", False)
-                print(f"\n[drift] Dataset drift detecte : {'OUI [!]' if drift else 'NON [OK]'}")
+                n_total = result.get("number_of_columns", 0)
+                drift = result.get("dataset_drift", False)
+                print(
+                    f"\n[drift] Dataset drift detecte : {'OUI [!]' if drift else 'NON [OK]'}"
+                )
                 print(f"[drift] Colonnes driftees : {n_drifted}/{n_total}")
     except Exception:
         pass
@@ -75,7 +81,10 @@ def _print_drift_summary(data: dict):
 
 # -- Drift numerique manuel (sans Evidently) ----------------------------------
 
-def run_manual_drift(ref_path: str, cur_path: str, output_dir: str = REPORTS_DIR) -> dict:
+
+def run_manual_drift(
+    ref_path: str, cur_path: str, output_dir: str = REPORTS_DIR
+) -> dict:
     """Calcule le drift colonne par colonne via Jensen-Shannon (distributions)."""
     ref = pd.read_csv(ref_path)[NUMERIC_FEATURES].dropna()
     cur = pd.read_csv(cur_path)[NUMERIC_FEATURES].dropna()
@@ -89,9 +98,7 @@ def run_manual_drift(ref_path: str, cur_path: str, output_dir: str = REPORTS_DIR
 
     for col in NUMERIC_FEATURES:
         bins = np.linspace(
-            min(ref[col].min(), cur[col].min()),
-            max(ref[col].max(), cur[col].max()),
-            50
+            min(ref[col].min(), cur[col].min()), max(ref[col].max(), cur[col].max()), 50
         )
         ref_hist, _ = np.histogram(ref[col], bins=bins, density=True)
         cur_hist, _ = np.histogram(cur[col], bins=bins, density=True)
@@ -130,6 +137,7 @@ def run_manual_drift(ref_path: str, cur_path: str, output_dir: str = REPORTS_DIR
 
 # -- Drift textuel (Jensen-Shannon sur TF-IDF) --------------------------------
 
+
 def run_text_drift(ref_path: str, cur_path: str, output_dir: str = REPORTS_DIR) -> dict:
     """Calcule le text drift via Jensen-Shannon sur les distributions TF-IDF."""
     ref = pd.read_csv(ref_path)["Rapport_Collecte"].dropna().tolist()
@@ -149,7 +157,9 @@ def run_text_drift(ref_path: str, cur_path: str, output_dir: str = REPORTS_DIR) 
     drifted = js > THRESHOLD
 
     print(f"\n[text drift] JS Divergence = {js:.4f}")
-    print(f"[text drift] {'[DRIFT DETECTE]' if drifted else '[Pas de drift]'} (seuil={THRESHOLD})")
+    print(
+        f"[text drift] {'[DRIFT DETECTE]' if drifted else '[Pas de drift]'} (seuil={THRESHOLD})"
+    )
 
     result = {
         "timestamp": datetime.now().isoformat(),
@@ -167,6 +177,7 @@ def run_text_drift(ref_path: str, cur_path: str, output_dir: str = REPORTS_DIR) 
 
 
 # -- Alertes ------------------------------------------------------------------
+
 
 def check_alerts(numeric_report: dict, text_report: dict = None):
     """Verifie les seuils et genere des alertes."""
@@ -199,13 +210,20 @@ def check_alerts(numeric_report: dict, text_report: dict = None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Monitoring drift Eco-Smart")
-    parser.add_argument("--reference", default="data/processed/dataset_clean.csv",
-                        help="Dataset de reference (train)")
-    parser.add_argument("--current",   default="data/processed/dataset_clean.csv",
-                        help="Dataset courant (production)")
-    parser.add_argument("--output",    default=REPORTS_DIR)
-    parser.add_argument("--evidently", action="store_true",
-                        help="Utiliser Evidently si disponible")
+    parser.add_argument(
+        "--reference",
+        default="data/processed/dataset_clean.csv",
+        help="Dataset de reference (train)",
+    )
+    parser.add_argument(
+        "--current",
+        default="data/processed/dataset_clean.csv",
+        help="Dataset courant (production)",
+    )
+    parser.add_argument("--output", default=REPORTS_DIR)
+    parser.add_argument(
+        "--evidently", action="store_true", help="Utiliser Evidently si disponible"
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -213,7 +231,9 @@ if __name__ == "__main__":
     print("=" * 60)
 
     if args.evidently:
-        numeric_report = run_numeric_drift_report(args.reference, args.current, args.output)
+        numeric_report = run_numeric_drift_report(
+            args.reference, args.current, args.output
+        )
     else:
         numeric_report = run_manual_drift(args.reference, args.current, args.output)
 

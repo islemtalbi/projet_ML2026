@@ -3,26 +3,27 @@ Module 4 — Pipeline NLP
 Extrait du notebook 04_NLP.ipynb
 """
 
+import argparse
+import json
 import os
 import re
-import json
 import warnings
-import argparse
+
 import joblib
 import mlflow
 import mlflow.sklearn
+import nltk
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import TruncatedSVD
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import LinearSVC
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, f1_score
-from sklearn.decomposition import TruncatedSVD
 from sklearn.pipeline import Pipeline
-import nltk
+from sklearn.svm import LinearSVC
 
 warnings.filterwarnings("ignore")
 
@@ -31,22 +32,33 @@ for pkg in ["stopwords", "punkt", "wordnet", "punkt_tab"]:
     nltk.download(pkg, quiet=True)
 
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 from nltk.stem import SnowballStemmer
+from nltk.tokenize import word_tokenize
 
 TARGET = "Categorie"
 
 # Stopwords domaine métier (évite le data leakage)
 STOP_DOMAINE = {
-    "lot", "déchet", "collecté", "volume", "poids",
-    "kg", "litre", "usine", "site", "matériau", "aspect",
-    "organique", "aluminium",
+    "lot",
+    "déchet",
+    "collecté",
+    "volume",
+    "poids",
+    "kg",
+    "litre",
+    "usine",
+    "site",
+    "matériau",
+    "aspect",
+    "organique",
+    "aluminium",
 }
 
 
 # ══════════════════════════════════════════════════════════════════════
 # PRÉTRAITEMENT TEXTUEL
 # ══════════════════════════════════════════════════════════════════════
+
 
 def get_stopwords() -> set:
     stop_fr = set(stopwords.words("french"))
@@ -63,7 +75,7 @@ def nettoyer_texte(texte: str) -> str:
 
 def pretraiter_texte(texte: str, tous_stopwords: set, stemmer) -> str:
     """Pipeline complet : nettoyage → tokenisation → stopwords → stemming."""
-    texte  = nettoyer_texte(texte)
+    texte = nettoyer_texte(texte)
     tokens = word_tokenize(texte, language="french")
     tokens = [t for t in tokens if t not in tous_stopwords]
     tokens = [stemmer.stem(t) for t in tokens]
@@ -85,14 +97,17 @@ def preprocess_texts(df: pd.DataFrame) -> pd.DataFrame:
 # VECTORISATION + CLASSIFICATION
 # ══════════════════════════════════════════════════════════════════════
 
+
 def _log_run(experiment_name, vectorizer_name, classifier_name, acc, f1):
     """Helper MLflow pour logguer une expérience NLP."""
     mlflow.set_experiment(experiment_name)
-    with mlflow.start_run(run_name=f"{vectorizer_name}_{classifier_name.replace(' ', '_')}"):
-        mlflow.log_param("vectorizer",  vectorizer_name)
-        mlflow.log_param("classifier",  classifier_name)
+    with mlflow.start_run(
+        run_name=f"{vectorizer_name}_{classifier_name.replace(' ', '_')}"
+    ):
+        mlflow.log_param("vectorizer", vectorizer_name)
+        mlflow.log_param("classifier", classifier_name)
         mlflow.log_metric("accuracy_test", acc)
-        mlflow.log_metric("f1_test",       f1)
+        mlflow.log_metric("f1_test", f1)
 
 
 def train_bow(X_train, X_test, y_train, y_test, scores: dict, experiment: str):
@@ -103,14 +118,14 @@ def train_bow(X_train, X_test, y_train, y_test, scores: dict, experiment: str):
 
     print("\n=== BoW ===")
     for nom, clf in {
-        "Naive Bayes":         MultinomialNB(),
+        "Naive Bayes": MultinomialNB(),
         "Logistic Regression": LogisticRegression(max_iter=1000),
-        "LinearSVC":           LinearSVC(),
+        "LinearSVC": LinearSVC(),
     }.items():
         clf.fit(X_tr, y_train)
         y_pred = clf.predict(X_te)
         acc = accuracy_score(y_test, y_pred)
-        f1  = f1_score(y_test, y_pred, average="weighted")
+        f1 = f1_score(y_test, y_pred, average="weighted")
         scores[f"BoW+{nom}"] = acc
         _log_run(experiment, "BoW", nom, acc, f1)
         print(f"  {nom:25s} → Acc: {acc:.4f} | F1: {f1:.4f}")
@@ -121,17 +136,17 @@ def train_bow(X_train, X_test, y_train, y_test, scores: dict, experiment: str):
 def train_tfidf(X_train, X_test, y_train, y_test, scores: dict, experiment: str):
     """TF-IDF avec unigrammes et bigrammes."""
     tfidf = TfidfVectorizer(ngram_range=(1, 2))
-    X_tr  = tfidf.fit_transform(X_train)
-    X_te  = tfidf.transform(X_test)
+    X_tr = tfidf.fit_transform(X_train)
+    X_te = tfidf.transform(X_test)
 
     best_clf = None
     best_acc = 0.0
 
     classifiers = {
-        "Naive Bayes":         MultinomialNB(),
+        "Naive Bayes": MultinomialNB(),
         "Logistic Regression": LogisticRegression(max_iter=1000),
-        "LinearSVC":           LinearSVC(),
-        "Random Forest":       RandomForestClassifier(n_estimators=100, random_state=42),
+        "LinearSVC": LinearSVC(),
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
     }
 
     print("\n=== TF-IDF ===")
@@ -139,7 +154,7 @@ def train_tfidf(X_train, X_test, y_train, y_test, scores: dict, experiment: str)
         clf.fit(X_tr, y_train)
         y_pred = clf.predict(X_te)
         acc = accuracy_score(y_test, y_pred)
-        f1  = f1_score(y_test, y_pred, average="weighted")
+        f1 = f1_score(y_test, y_pred, average="weighted")
         scores[f"TF-IDF+{nom}"] = acc
         _log_run(experiment, "TF-IDF", nom, acc, f1)
         print(f"  {nom:25s} → Acc: {acc:.4f} | F1: {f1:.4f}")
@@ -152,33 +167,37 @@ def train_tfidf(X_train, X_test, y_train, y_test, scores: dict, experiment: str)
 
 def train_lsa(X_train, X_test, y_train, y_test, scores: dict, experiment: str):
     """LSA = TF-IDF + TruncatedSVD (alternative sémantique à Word2Vec)."""
-    lsa_pipe = Pipeline([
-        ("tfidf", TfidfVectorizer(ngram_range=(1, 2))),
-        ("svd",   TruncatedSVD(n_components=100, random_state=42)),
-    ])
+    lsa_pipe = Pipeline(
+        [
+            ("tfidf", TfidfVectorizer(ngram_range=(1, 2))),
+            ("svd", TruncatedSVD(n_components=100, random_state=42)),
+        ]
+    )
     X_tr = lsa_pipe.fit_transform(X_train)
     X_te = lsa_pipe.transform(X_test)
 
     print("\n=== LSA (alternative Word2Vec) ===")
     for nom, clf in {
         "Logistic Regression": LogisticRegression(max_iter=1000),
-        "LinearSVC":           LinearSVC(),
+        "LinearSVC": LinearSVC(),
     }.items():
         clf.fit(X_tr, y_train)
         acc = accuracy_score(y_test, clf.predict(X_te))
-        f1  = f1_score(y_test, clf.predict(X_te), average="weighted")
+        f1 = f1_score(y_test, clf.predict(X_te), average="weighted")
         scores[f"LSA+{nom}"] = acc
         _log_run(experiment, "LSA", nom, acc, f1)
         print(f"  {nom:25s} → Acc: {acc:.4f} | F1: {f1:.4f}")
 
 
-def train_fasttext_like(X_train, X_test, y_train, y_test, scores: dict, experiment: str):
+def train_fasttext_like(
+    X_train, X_test, y_train, y_test, scores: dict, experiment: str
+):
     """FastText-like via char n-grammes (robuste aux fautes d'orthographe)."""
     ft_vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), min_df=2)
     clf_ft = LinearSVC()
     clf_ft.fit(ft_vec.fit_transform(X_train), y_train)
     acc = accuracy_score(y_test, clf_ft.predict(ft_vec.transform(X_test)))
-    f1  = f1_score(y_test, clf_ft.predict(ft_vec.transform(X_test)), average="weighted")
+    f1 = f1_score(y_test, clf_ft.predict(ft_vec.transform(X_test)), average="weighted")
     scores["FastText-like+LinearSVC"] = acc
     _log_run(experiment, "FastText-like", "LinearSVC", acc, f1)
     print(f"\n=== FastText-like ===")
@@ -190,8 +209,10 @@ def train_fasttext_like(X_train, X_test, y_train, y_test, scores: dict, experime
 # POINT D'ENTRÉE PRINCIPAL
 # ══════════════════════════════════════════════════════════════════════
 
-def train_nlp(data_path: str, models_dir: str = "models",
-              experiment: str = "EcoSmart_NLP"):
+
+def train_nlp(
+    data_path: str, models_dir: str = "models", experiment: str = "EcoSmart_NLP"
+):
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs("reports", exist_ok=True)
 
@@ -201,7 +222,7 @@ def train_nlp(data_path: str, models_dir: str = "models",
     df_nlp = preprocess_texts(df_nlp)
 
     X_text = df_nlp["texte_propre"]
-    y      = df_nlp[TARGET]
+    y = df_nlp[TARGET]
 
     # Split 70/15/15
     X_train, X_temp, y_train, y_temp = train_test_split(
@@ -216,7 +237,9 @@ def train_nlp(data_path: str, models_dir: str = "models",
 
     # Toutes les approches
     train_bow(X_train, X_test, y_train, y_test, scores, experiment)
-    tfidf, best_nlp_clf = train_tfidf(X_train, X_test, y_train, y_test, scores, experiment)
+    tfidf, best_nlp_clf = train_tfidf(
+        X_train, X_test, y_train, y_test, scores, experiment
+    )
     train_lsa(X_train, X_test, y_train, y_test, scores, experiment)
     train_fasttext_like(X_train, X_test, y_train, y_test, scores, experiment)
 
@@ -226,29 +249,33 @@ def train_nlp(data_path: str, models_dir: str = "models",
         print(f"  {k:45s} → {v:.4f}")
 
     best_combo = max(scores, key=scores.get)
-    best_acc   = scores[best_combo]
+    best_acc = scores[best_combo]
     print(f"\n[✓] Meilleure combinaison : {best_combo} ({best_acc:.4f})")
 
     # Sauvegarde modèles
-    joblib.dump(tfidf,        os.path.join(models_dir, "tfidf_vectorizer.pkl"))
+    joblib.dump(tfidf, os.path.join(models_dir, "tfidf_vectorizer.pkl"))
     joblib.dump(best_nlp_clf, os.path.join(models_dir, "nlp_classifier.pkl"))
     print(f"[saved] tfidf_vectorizer.pkl + nlp_classifier.pkl → {models_dir}/")
 
     # Métriques JSON pour DVC
     with open("reports/metrics_nlp.json", "w") as f:
-        json.dump({
-            "best_combination": best_combo,
-            "best_accuracy":    round(best_acc, 4),
-            "all_scores":       {k: round(v, 4) for k, v in scores.items()},
-        }, f, indent=2)
+        json.dump(
+            {
+                "best_combination": best_combo,
+                "best_accuracy": round(best_acc, 4),
+                "all_scores": {k: round(v, 4) for k, v in scores.items()},
+            },
+            f,
+            indent=2,
+        )
 
     return tfidf, best_nlp_clf, scores
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data",       default="data/processed/dataset_clean.csv")
-    parser.add_argument("--models",     default="models")
+    parser.add_argument("--data", default="data/processed/dataset_clean.csv")
+    parser.add_argument("--models", default="models")
     parser.add_argument("--experiment", default="EcoSmart_NLP")
     args = parser.parse_args()
     train_nlp(args.data, args.models, args.experiment)

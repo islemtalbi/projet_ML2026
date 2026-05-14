@@ -3,14 +3,15 @@ Module 1 — Nettoyage et préparation des données
 Extrait du notebook 01_EDA_Nettoyage.ipynb
 """
 
+import argparse
 import os
 import warnings
-import argparse
-import pandas as pd
-import numpy as np
+
 import joblib
-from sklearn.impute import KNNImputer, SimpleImputer
+import numpy as np
+import pandas as pd
 from sklearn.experimental import enable_iterative_imputer  # noqa
+from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 warnings.filterwarnings("ignore")
@@ -38,7 +39,9 @@ def remove_impossible_values(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def remove_outliers_iqr(df: pd.DataFrame, colonnes: list, factor: float = 3.0) -> pd.DataFrame:
+def remove_outliers_iqr(
+    df: pd.DataFrame, colonnes: list, factor: float = 3.0
+) -> pd.DataFrame:
     for col in colonnes:
         Q1 = df[col].quantile(0.25)
         Q3 = df[col].quantile(0.75)
@@ -75,7 +78,9 @@ def encode_features(df: pd.DataFrame):
 
     le_categorie = LabelEncoder()
     mask = df["Categorie"].notna()
-    df.loc[mask, "Categorie_encoded"] = le_categorie.fit_transform(df.loc[mask, "Categorie"])
+    df.loc[mask, "Categorie_encoded"] = le_categorie.fit_transform(
+        df.loc[mask, "Categorie"]
+    )
 
     print(f"[encode] Source classes : {le_source.classes_}")
     print(f"[encode] Categorie classes : {le_categorie.classes_}")
@@ -114,7 +119,7 @@ def preprocess(input_path: str, output_path: str, models_dir: str = "models"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",  default="data/raw/dataset_ProjetML_2026.csv")
+    parser.add_argument("--input", default="data/raw/dataset_ProjetML_2026.csv")
     parser.add_argument("--output", default="data/processed/dataset_clean.csv")
     parser.add_argument("--models", default="models")
     args = parser.parse_args()

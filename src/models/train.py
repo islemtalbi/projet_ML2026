@@ -3,34 +3,35 @@ Module 2 — Modélisation supervisée + MLflow tracking
 Extrait du notebook 02_ML_Supervise.ipynb
 """
 
-import os
-import json
-import warnings
 import argparse
-import numpy as np
-import pandas as pd
+import json
+import os
+import warnings
+
 import joblib
 import mlflow
 import mlflow.sklearn
+import numpy as np
+import pandas as pd
 from mlflow.tracking import MlflowClient
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.ensemble import (
-    RandomForestClassifier,
     GradientBoostingClassifier,
-    RandomForestRegressor,
     GradientBoostingRegressor,
+    RandomForestClassifier,
+    RandomForestRegressor,
 )
-from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge
-from sklearn.svm import SVC, SVR
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge
 from sklearn.metrics import (
     accuracy_score,
-    f1_score,
     classification_report,
+    f1_score,
     mean_squared_error,
     r2_score,
 )
+from sklearn.model_selection import GridSearchCV, cross_val_score, train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC, SVR
+from sklearn.tree import DecisionTreeClassifier
 
 warnings.filterwarnings("ignore")
 
@@ -267,7 +268,9 @@ def evaluate_final_classifier(model, X_test, y_test, experiment_name: str):
     # Sauvegarde métriques JSON
     os.makedirs("reports", exist_ok=True)
     with open("reports/metrics_classification.json", "w") as f:
-        json.dump({"accuracy_test": round(acc, 4), "f1_test": round(f1, 4)}, f, indent=2)
+        json.dump(
+            {"accuracy_test": round(acc, 4), "f1_test": round(f1, 4)}, f, indent=2
+        )
 
     return acc, f1
 

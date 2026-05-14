@@ -5,20 +5,21 @@ Endpoint /predict pour la classification de déchets
 
 import os
 import re
+from typing import Optional
+
 import joblib
-import numpy as np
 import nltk
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional
 
 # NLTK downloads
 for pkg in ["stopwords", "punkt", "wordnet", "punkt_tab"]:
     nltk.download(pkg, quiet=True)
 
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 from nltk.stem import SnowballStemmer
+from nltk.tokenize import word_tokenize
 
 # ── Chemins modèles ────────────────────────────────────────────────────────────
 MODELS_DIR = os.getenv("MODELS_DIR", "models")
@@ -44,32 +45,32 @@ _models = {}
 
 def get_models():
     if not _models:
-        _models["classifier"]      = load_model("classifier_best.pkl")
-        _models["regressor"]       = load_model("regressor_best.pkl")
-        _models["scaler"]          = load_model("scaler.pkl")
-        _models["le_source"]       = load_model("le_source.pkl")
-        _models["le_categorie"]    = load_model("le_categorie.pkl")
-        _models["tfidf"]           = load_model("tfidf_vectorizer.pkl")
-        _models["nlp_classifier"]  = load_model("nlp_classifier.pkl")
+        _models["classifier"] = load_model("classifier_best.pkl")
+        _models["regressor"] = load_model("regressor_best.pkl")
+        _models["scaler"] = load_model("scaler.pkl")
+        _models["le_source"] = load_model("le_source.pkl")
+        _models["le_categorie"] = load_model("le_categorie.pkl")
+        _models["tfidf"] = load_model("tfidf_vectorizer.pkl")
+        _models["nlp_classifier"] = load_model("nlp_classifier.pkl")
     return _models
 
 
 # ── Schémas Pydantic ──────────────────────────────────────────────────────────
 class PredictionRequest(BaseModel):
-    poids:       float = Field(..., gt=0, description="Poids en kg")
-    volume:      float = Field(..., gt=0, description="Volume en litres")
+    poids: float = Field(..., gt=0, description="Poids en kg")
+    volume: float = Field(..., gt=0, description="Volume en litres")
     conductivite: float = Field(..., description="Conductivité")
-    opacite:     float = Field(..., ge=0, le=1, description="Opacité [0-1]")
-    rigidite:    float = Field(..., description="Rigidité")
-    source:      str   = Field(..., description="Source du déchet")
-    rapport:     Optional[str] = Field(None, description="Rapport collecte (NLP)")
+    opacite: float = Field(..., ge=0, le=1, description="Opacité [0-1]")
+    rigidite: float = Field(..., description="Rigidité")
+    source: str = Field(..., description="Source du déchet")
+    rapport: Optional[str] = Field(None, description="Rapport collecte (NLP)")
 
 
 class PredictionResponse(BaseModel):
-    categorie:       str
-    prix_estime:     float
-    confidence:      Optional[float] = None
-    nlp_categorie:   Optional[str]   = None
+    categorie: str
+    prix_estime: float
+    confidence: Optional[float] = None
+    nlp_categorie: Optional[str] = None
 
 
 class HealthResponse(BaseModel):
@@ -79,14 +80,31 @@ class HealthResponse(BaseModel):
 
 # ── Preprocessing NLP ─────────────────────────────────────────────────────────
 STOP_DOMAINE = {
-    "lot", "déchet", "collecté", "volume", "poids", "kg",
-    "litre", "usine", "site", "matériau", "aspect",
-    "papier", "plastique", "metal", "métal", "verre",
-    "organique", "carton", "aluminium", "ferreux", "ferraille",
+    "lot",
+    "déchet",
+    "collecté",
+    "volume",
+    "poids",
+    "kg",
+    "litre",
+    "usine",
+    "site",
+    "matériau",
+    "aspect",
+    "papier",
+    "plastique",
+    "metal",
+    "métal",
+    "verre",
+    "organique",
+    "carton",
+    "aluminium",
+    "ferreux",
+    "ferraille",
 }
 
-_stop_fr  = set(stopwords.words("french")).union(STOP_DOMAINE)
-_stemmer  = SnowballStemmer("french")
+_stop_fr = set(stopwords.words("french")).union(STOP_DOMAINE)
+_stemmer = SnowballStemmer("french")
 
 
 def preprocess_text(texte: str) -> str:
@@ -128,8 +146,9 @@ def predict(req: PredictionRequest):
         source_enc = 0  # classe inconnue → 0
 
     # Normaliser features numériques
-    raw = np.array([[req.poids, req.volume, req.conductivite,
-                     req.opacite, req.rigidite]])
+    raw = np.array(
+        [[req.poids, req.volume, req.conductivite, req.opacite, req.rigidite]]
+    )
     scaled = m["scaler"].transform(raw)
     features = np.append(scaled[0], source_enc).reshape(1, -1)
 
