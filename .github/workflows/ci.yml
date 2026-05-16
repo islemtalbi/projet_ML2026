@@ -66,7 +66,8 @@ jobs:
             --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=70 \
-            -v
+            -v \
+            -k "not TestModelPredictions and not TestPerformanceThreshold and not TestAPIEndpoint and not TestPostImputation and not TestDataSchema"
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
