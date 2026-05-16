@@ -84,6 +84,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create empty models directory
+        run: mkdir -p models
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
