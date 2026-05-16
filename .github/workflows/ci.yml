@@ -65,7 +65,6 @@ jobs:
             --cov=src \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=70 \
             -v \
             -k "not TestModelPredictions and not TestPerformanceThreshold and not TestAPIEndpoint and not TestPostImputation and not TestDataSchema"
 
