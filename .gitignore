@@ -6,7 +6,7 @@ venv/
 data/raw/*.csv  
 data/processed/*.csv  
 # Modeles  
-*.pkl  
+ 
 *.joblib  
 # MLflow  
 mlruns/ 
