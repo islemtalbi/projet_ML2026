@@ -252,9 +252,10 @@ st.markdown("""
 # ══════════════════════════════════════════════════════════════════
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════
-MODELS_DIR  = "models"
-DATA_RAW    = "data/raw/dataset_ProjetML_2026.csv"
-DATA_CLEAN  = "data/processed/dataset_clean.csv"
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR  = os.path.join(BASE_DIR, "models")
+DATA_RAW    = os.path.join(BASE_DIR, "data", "raw", "dataset_ProjetML_2026.csv")
+DATA_CLEAN  = os.path.join(BASE_DIR, "data", "processed", "dataset_clean.csv")
 
 CAT_COLORS = {
     "Métal":     "#78909c",
